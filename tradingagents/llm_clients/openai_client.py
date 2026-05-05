@@ -166,7 +166,8 @@ class OpenAIClient(BaseLLMClient):
 
         # Native OpenAI: use Responses API for consistent behavior across
         # all model families. Third-party providers use Chat Completions.
-        if self.provider == "openai":
+        # When a custom base_url is set (third-party proxy), don't use Responses API.
+        if self.provider == "openai" and not self.base_url:
             llm_kwargs["use_responses_api"] = True
 
         # DeepSeek's thinking-mode quirks live in their own subclass so the

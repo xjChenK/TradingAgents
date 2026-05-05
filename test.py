@@ -1,11 +1,13 @@
-import time
-from tradingagents.dataflows.y_finance import get_YFin_data_online, get_stock_stats_indicators_window, get_balance_sheet as get_yfinance_balance_sheet, get_cashflow as get_yfinance_cashflow, get_income_statement as get_yfinance_income_statement, get_insider_transactions as get_yfinance_insider_transactions
+import os
+for k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']:
+    os.environ.pop(k, None)
+os.environ['no_proxy'] = '*'
 
-print("Testing optimized implementation with 30-day lookback:")
-start_time = time.time()
-result = get_stock_stats_indicators_window("AAPL", "macd", "2024-11-01", 30)
-end_time = time.time()
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.default_config import DEFAULT_CONFIG
 
-print(f"Execution time: {end_time - start_time:.2f} seconds")
-print(f"Result length: {len(result)} characters")
-print(result)
+ta = TradingAgentsGraph(debug=True, config=DEFAULT_CONFIG.copy())
+
+# 分析 A 股示例
+decision = ta.propagate("600519.SS", "2026-04-20")  # 贵州茅台
+print(decision)

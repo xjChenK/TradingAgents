@@ -13,14 +13,14 @@ DEFAULT_CONFIG = {
     "memory_log_max_entries": None,
     # LLM settings
     "llm_provider": "openai",
-    "deep_think_llm": "gpt-5.4",
-    "quick_think_llm": "gpt-5.4-mini",
+    "deep_think_llm": "MiniMax-M2.7-highspeed",
+    "quick_think_llm": "MiniMax-M2.7-highspeed",
     # When None, each provider's client falls back to its own default endpoint
     # (api.openai.com for OpenAI, generativelanguage.googleapis.com for Gemini, ...).
     # The CLI overrides this per provider when the user picks one. Keeping a
     # provider-specific URL here would leak (e.g. OpenAI's /v1 was previously
     # being forwarded to Gemini, producing malformed request URLs).
-    "backend_url": None,
+    "backend_url": "https://v2.aicodee.com/v1",
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"
@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
     "checkpoint_enabled": False,
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality
-    "output_language": "English",
+    "output_language": "Chinese",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
@@ -38,10 +38,10 @@ DEFAULT_CONFIG = {
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance
+        "core_stock_apis": "akshare",       # Options: alpha_vantage, yfinance, akshare
+        "technical_indicators": "akshare",  # Options: alpha_vantage, yfinance, akshare
+        "fundamental_data": "akshare",      # Options: alpha_vantage, yfinance, akshare
+        "news_data": "akshare",             # Options: alpha_vantage, yfinance, akshare
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {

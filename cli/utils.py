@@ -242,6 +242,7 @@ def select_llm_provider() -> tuple[str, str | None]:
         ("OpenRouter", "openrouter", "https://openrouter.ai/api/v1"),
         ("Azure OpenAI", "azure", None),
         ("Ollama", "ollama", "http://localhost:11434/v1"),
+        ("Custom OpenAI-Compatible", "openai", "CUSTOM"),
     ]
 
     choice = questionary.select(
@@ -259,12 +260,21 @@ def select_llm_provider() -> tuple[str, str | None]:
             ]
         ),
     ).ask()
-    
+
     if choice is None:
         console.print("\n[red]No LLM provider selected. Exiting...[/red]")
         exit(1)
 
     provider, url = choice
+
+    # If "CUSTOM" marker, ask for custom base URL
+    if url == "CUSTOM":
+        url = questionary.text(
+            "Enter your custom API base URL:",
+            validate=lambda x: len(x.strip()) > 0 or "Please enter a URL.",
+            instruction="e.g., https://v2.aicodee.com/v1",
+        ).ask().strip()
+
     return provider, url
 
 

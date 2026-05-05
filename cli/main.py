@@ -28,6 +28,320 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
+
+
+def generate_html_report_from_state(final_state: dict, save_path: Path):
+    """Generate HTML report from final_state after markdown report is saved."""
+    import markdown
+    import re
+
+    # Inline helper functions
+    def parse_decision_signal(decision_text: str) -> dict:
+        signal = {"action": "Hold", "confidence": "Medium", "signal_class": "signal-hold"}
+        if not decision_text:
+            return signal
+        text_lower = decision_text.lower()
+        if "buy" in text_lower or "做多" in text_lower or "买入" in text_lower or "买" in text_lower:
+            signal["action"] = "买入 (Buy)"
+            signal["signal_class"] = "signal-buy"
+        elif "sell" in text_lower or "做空" in text_lower or "卖出" in text_lower or "卖" in text_lower:
+            signal["action"] = "卖出 (Sell)"
+            signal["signal_class"] = "signal-sell"
+        elif "hold" in text_lower or "持有" in text_lower or "观望" in text_lower:
+            signal["action"] = "观望 (Hold)"
+            signal["signal_class"] = "signal-hold"
+        if "strong" in text_lower or "强烈" in text_lower:
+            signal["confidence"] = "高"
+        elif "cautious" in text_lower or "谨慎" in text_lower or "保守" in text_lower:
+            signal["confidence"] = "低"
+        return signal
+
+    def extract_key_metrics(market_report: str) -> dict:
+        metrics = {"rsi": None, "macd": None, "support": None, "resistance": None, "signal": "中性"}
+        if not market_report:
+            return metrics
+        rsi_match = re.search(r'RSI[^\d]*(\d+\.?\d*)', market_report)
+        if rsi_match:
+            metrics["rsi"] = float(rsi_match.group(1))
+        macd_match = re.search(r'MACD[^\d]*(-?\d+\.?\d*)', market_report)
+        if macd_match:
+            metrics["macd"] = float(macd_match.group(1))
+        support_match = re.search(r'支撑.*?(\d+\.?\d*)', market_report)
+        if support_match:
+            metrics["support"] = float(support_match.group(1))
+        resistance_match = re.search(r'阻力.*?(\d+\.?\d*)', market_report)
+        if resistance_match:
+            metrics["resistance"] = float(resistance_match.group(1))
+        if "看多" in market_report or "买入" in market_report or "buy" in market_report.lower():
+            metrics["signal"] = "看多"
+        elif "看空" in market_report or "卖出" in market_report or "sell" in market_report.lower():
+            metrics["signal"] = "看空"
+        return metrics
+
+    # CSS and JS
+    REPORT_CSS = """
+:root {
+    --primary-color: #1a73e8;
+    --secondary-color: #f8f9fa;
+    --text-color: #333;
+    --accent-green: #28a745;
+    --accent-red: #dc3545;
+    --accent-yellow: #ffc107;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-color);
+    line-height: 1.6;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f5;
+}
+.header {
+    text-align: center;
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.header h1 { color: var(--primary-color); font-size: 1.8em; margin-bottom: 8px; }
+.header .meta { color: #666; font-size: 0.85em; }
+.signal-box {
+    display: inline-block;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 1em;
+    margin: 10px 0;
+}
+.signal-buy { background: var(--accent-green); color: white; }
+.signal-sell { background: var(--accent-red); color: white; }
+.signal-hold { background: var(--accent-yellow); color: #333; }
+.metrics-bar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+}
+.metric-badge {
+    background: var(--primary-color);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 0.8em;
+}
+.metric-badge .value { font-weight: bold; }
+.tab-nav {
+    display: flex;
+    gap: 4px;
+    background: white;
+    padding: 8px;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    overflow-x: auto;
+}
+.tab-btn {
+    flex: 1;
+    min-width: 90px;
+    padding: 10px 12px;
+    border: none;
+    background: var(--secondary-color);
+    color: #666;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+.tab-btn:hover { background: #e0e0e0; }
+.tab-btn.active { background: var(--primary-color); color: white; }
+.tab-content-wrapper {
+    background: white;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    min-height: 400px;
+}
+.tab-content { display: none; padding: 20px; }
+.tab-content.active { display: block; }
+.tab-content h2 { color: var(--primary-color); font-size: 1.2em; border-bottom: 2px solid var(--primary-color); padding-bottom: 8px; margin-bottom: 15px; }
+.tab-content h3 { color: #555; font-size: 1em; margin: 15px 0 8px 0; padding-left: 8px; border-left: 3px solid var(--primary-color); }
+.tab-content p { margin: 8px 0; }
+.tab-content table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.9em; }
+.tab-content th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #ddd; }
+.tab-content th { background: var(--primary-color); color: white; }
+.tab-content tr:nth-child(even) { background: var(--secondary-color); }
+.tab-content blockquote { border-left: 3px solid var(--primary-color); margin: 10px 0; padding: 8px 12px; background: #f0f7ff; }
+.footer { text-align: center; margin-top: 20px; padding: 12px; color: #888; font-size: 0.75em; }
+@media (max-width: 600px) {
+    .tab-nav { flex-wrap: wrap; }
+    .tab-btn { min-width: 70px; font-size: 0.75em; padding: 8px 6px; }
+    .metrics-bar { gap: 6px; }
+    .metric-badge { padding: 5px 8px; font-size: 0.7em; }
+}
+"""
+
+    JAVASCRIPT_TAB = """
+<script>
+function openTab(evt, tabName) {
+    var i, content, buttons;
+    content = document.getElementsByClassName("tab-content");
+    for (i = 0; i < content.length; i++) {
+        content[i].classList.remove("active");
+    }
+    buttons = document.getElementsByClassName("tab-btn");
+    for (i = 0; i < buttons.length; i++) {
+        buttons[i].classList.remove("active");
+    }
+    document.getElementById(tabName).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+</script>
+"""
+
+    # Reconstruct data dict from final_state
+    data = {
+        "company_of_interest": final_state.get("company_of_interest", ""),
+        "trade_date": final_state.get("trade_date", ""),
+        "market_report": final_state.get("market_report", ""),
+        "sentiment_report": final_state.get("sentiment_report", ""),
+        "news_report": final_state.get("news_report", ""),
+        "fundamentals_report": final_state.get("fundamentals_report", ""),
+        "bull_history": final_state.get("investment_debate_state", {}).get("bull_history", ""),
+        "bear_history": final_state.get("investment_debate_state", {}).get("bear_history", ""),
+        "investment_plan": final_state.get("investment_plan", ""),
+        "trader_investment_plan": final_state.get("trader_investment_plan", ""),
+        "aggressive_history": final_state.get("risk_debate_state", {}).get("aggressive_history", ""),
+        "conservative_history": final_state.get("risk_debate_state", {}).get("conservative_history", ""),
+        "neutral_history": final_state.get("risk_debate_state", {}).get("neutral_history", ""),
+        "final_trade_decision": final_state.get("final_trade_decision", ""),
+    }
+
+    signal = parse_decision_signal(data.get("final_trade_decision", ""))
+    metrics = extract_key_metrics(data.get("market_report", ""))
+
+    md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
+
+    def convert_md(text):
+        md.reset()
+        return md.convert(text) if text else "无数据"
+
+    market_html = convert_md(data.get('market_report'))
+    sentiment_html = convert_md(data.get('sentiment_report'))
+    news_html = convert_md(data.get('news_report'))
+    fundamentals_html = convert_md(data.get('fundamentals_report'))
+    bull_html = convert_md(data.get('bull_history'))
+    bear_html = convert_md(data.get('bear_history'))
+    investment_plan_html = convert_md(data.get('investment_plan'))
+    trader_html = convert_md(data.get('trader_investment_plan'))
+    aggressive_html = convert_md(data.get('aggressive_history'))
+    conservative_html = convert_md(data.get('conservative_history'))
+    neutral_html = convert_md(data.get('neutral_history'))
+    decision_html = convert_md(data.get('final_trade_decision'))
+
+    rsi_val = f"{metrics.get('rsi', 'N/A'):.2f}" if metrics.get('rsi') else 'N/A'
+    macd_val = f"{metrics.get('macd', 'N/A'):.2f}" if metrics.get('macd') else 'N/A'
+    support_val = f"{metrics.get('support', 'N/A'):.2f}" if metrics.get('support') else 'N/A'
+    resistance_val = f"{metrics.get('resistance', 'N/A'):.2f}" if metrics.get('resistance') else 'N/A'
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingAgents 分析报告 - {data.get('company_of_interest', 'N/A')}</title>
+    <style>{REPORT_CSS}</style>
+</head>
+<body>
+    <div class="header">
+        <h1>📈 TradingAgents 分析报告</h1>
+        <div class="meta">
+            <strong>股票代码:</strong> {data.get('company_of_interest', 'N/A')} |
+            <strong>分析日期:</strong> {data.get('trade_date', 'N/A')} |
+            <strong>生成时间:</strong> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}
+        </div>
+        <div class="signal-box {signal['signal_class']}">
+            交易信号: {signal['action']} (置信度: {signal['confidence']})
+        </div>
+        <div class="metrics-bar">
+            <div class="metric-badge">RSI: <span class="value">{rsi_val}</span></div>
+            <div class="metric-badge">MACD: <span class="value">{macd_val}</span></div>
+            <div class="metric-badge">技术信号: <span class="value">{metrics.get('signal', 'N/A')}</span></div>
+            <div class="metric-badge">支撑: <span class="value">{support_val}</span></div>
+            <div class="metric-badge">阻力: <span class="value">{resistance_val}</span></div>
+        </div>
+    </div>
+
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="openTab(event, 'tab-market')">📊 市场分析</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-sentiment')">💬 情绪分析</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-news')">📰 新闻分析</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-fundamentals')">📈 基本面</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-debate')">🔄 投资辩论</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-trading')">💼 交易决策</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-risk')">⚖️ 风险辩论</button>
+        <button class="tab-btn" onclick="openTab(event, 'tab-decision')">🎯 最终决策</button>
+    </div>
+
+    <div class="tab-content-wrapper">
+        <div id="tab-market" class="tab-content active">
+            <h2>📊 市场技术分析</h2>
+            {market_html}
+        </div>
+        <div id="tab-sentiment" class="tab-content">
+            <h2>💬 情绪分析</h2>
+            {sentiment_html}
+        </div>
+        <div id="tab-news" class="tab-content">
+            <h2>📰 新闻分析</h2>
+            {news_html}
+        </div>
+        <div id="tab-fundamentals" class="tab-content">
+            <h2>📈 基本面分析</h2>
+            {fundamentals_html}
+        </div>
+        <div id="tab-debate" class="tab-content">
+            <h2>🔄 投资辩论</h2>
+            <h3>看多方观点</h3>
+            {bull_html}
+            <h3>看空方观点</h3>
+            {bear_html}
+            <h3>研究经理决策</h3>
+            {investment_plan_html}
+        </div>
+        <div id="tab-trading" class="tab-content">
+            <h2>💼 交易决策</h2>
+            <h3>交易员提案</h3>
+            {trader_html}
+        </div>
+        <div id="tab-risk" class="tab-content">
+            <h2>⚖️ 风险辩论</h2>
+            <h3>激进观点</h3>
+            {aggressive_html}
+            <h3>保守观点</h3>
+            {conservative_html}
+            <h3>中性观点</h3>
+            {neutral_html}
+        </div>
+        <div id="tab-decision" class="tab-content">
+            <h2>🎯 最终交易决策</h2>
+            {decision_html}
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>由 TradingAgents 多智能体框架生成 | 仅供参考，不构成投资建议</p>
+    </div>
+    {JAVASCRIPT_TAB}
+</body>
+</html>"""
+
+    html_path = save_path / "report.html"
+    html_path.write_text(html_content, encoding="utf-8")
+    return html_path
 from cli.announcements import fetch_announcements, display_announcements
 from cli.stats_handler import StatsCallbackHandler
 
@@ -1188,6 +1502,14 @@ def run_analysis(checkpoint: bool = False):
             report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
             console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+
+            # Generate HTML report with tabbed interface
+            try:
+                html_file = generate_html_report_from_state(final_state, save_path)
+                console.print(f"  [green]✓ HTML report:[/green] {html_file.name}")
+            except Exception as e:
+                console.print(f"  [yellow]⚠ HTML report generation failed: {e}[/yellow]")
+
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
 

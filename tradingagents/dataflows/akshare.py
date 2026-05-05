@@ -552,16 +552,22 @@ def get_income_statement(
 
 
 def get_news(
-    symbol: Annotated[str, "ticker symbol of the company"],
+    ticker: Annotated[str, "ticker symbol of the company"],
+    start_date: Annotated[str, "Start date in yyyy-mm-dd format"] = None,
+    end_date: Annotated[str, "End date in yyyy-mm-dd format"] = None,
 ) -> str:
-    """Get news data from AkShare for a specific stock."""
+    """Get news data from AkShare for a specific stock.
+
+    Note: AkShare's news API doesn't support date filtering, so start_date
+    and end_date are accepted for compatibility but not used.
+    """
     try:
-        market, code = _normalize_a_stock_code(symbol)
+        market, code = _normalize_a_stock_code(ticker)
 
         df = ak.stock_news_em(symbol=code)
 
         if df is None or df.empty:
-            return f"No news data found for symbol '{symbol}'"
+            return f"No news data found for symbol '{ticker}'"
 
         # Limit to recent news
         df = df.head(20)
@@ -569,30 +575,41 @@ def get_news(
         lines = []
         for _, row in df.iterrows():
             lines.append(f"### {row.get('发布时间', 'N/A')}: {row.get('新闻标题', 'No title')}")
-            lines.append(f"{row.get('新闻内容', 'No content')[:500]}")
+            content = str(row.get('新闻内容', 'No content'))
+            lines.append(content[:500] if len(content) > 500 else content)
             lines.append("")
 
-        header = f"# News for {symbol.upper()}\n"
+        header = f"# News for {ticker.upper()}\n"
         header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
 
         return header + "\n".join(lines)
 
     except Exception as e:
-        return f"Error retrieving news for {symbol}: {str(e)}"
+        return f"Error retrieving news for {ticker}: {str(e)}"
 
 
-def get_global_news() -> str:
-    """Get global financial news from AkShare."""
+def get_global_news(
+    curr_date: Annotated[str, "Current date in yyyy-mm-dd format"] = None,
+    look_back_days: Annotated[int, "Number of days to look back"] = 7,
+    limit: Annotated[int, "Maximum number of articles to return"] = 5,
+) -> str:
+    """Get global financial news from AkShare.
+
+    Note: curr_date and look_back_days are accepted for compatibility but
+    not used by AkShare's news API.
+    """
     try:
-        df = ak.stock_news_read_news(link="")
+        # AkShare doesn't support date-filtered global news, so we just fetch recent
+        df = ak.stock_news_em(symbol="000001")  # Use a general symbol to get market news
 
         if df is None or df.empty:
             return "No global news available"
 
         lines = []
-        for _, row in df.head(20).iterrows():
+        for _, row in df.head(limit).iterrows():
             lines.append(f"### {row.get('发布时间', 'N/A')}: {row.get('新闻标题', 'No title')}")
-            lines.append(f"{row.get('新闻内容', 'No content')[:300]}")
+            content = str(row.get('新闻内容', 'No content'))
+            lines.append(content[:300] if len(content) > 300 else content)
             lines.append("")
 
         header = "# Global Financial News\n"

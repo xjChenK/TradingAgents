@@ -7,7 +7,10 @@ import functools
 from langchain_core.messages import AIMessage
 
 from tradingagents.agents.schemas import TraderProposal, render_trader_proposal
-from tradingagents.agents.utils.agent_utils import build_instrument_context
+from tradingagents.agents.utils.agent_utils import (
+    build_instrument_context,
+    get_language_instruction,
+)
 from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
@@ -39,7 +42,7 @@ def create_trader(llm):
                     f"insights from current technical market trends, macroeconomic indicators, and "
                     f"social media sentiment. Use this plan as a foundation for evaluating your next "
                     f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
-                    f"Leverage these insights to make an informed and strategic decision."
+                    f"Leverage these insights to make an informed and strategic decision.{get_language_instruction()}"
                 ),
             },
         ]

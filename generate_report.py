@@ -8,6 +8,20 @@ import re
 
 # CSS template for beautiful report with tabbed interface
 REPORT_CSS = """
+@font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Noto Sans SC'), local('NotoSansSC-Regular');
+}
+
+@font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 700;
+    src: local('Noto Sans SC Bold'), local('NotoSansSC-Bold');
+}
+
 :root {
     --primary-color: #1a73e8;
     --secondary-color: #f8f9fa;
@@ -20,7 +34,7 @@ REPORT_CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: var(--text-color);
     line-height: 1.6;
     max-width: 1000px;
@@ -450,7 +464,8 @@ def main():
         print("❌ 未找到任何报告")
         return
 
-    latest_report = max(reports, key=lambda x: x.name)
+    # Sort by date part of report name (format: STOCKCODE_YYYYMMDD_HHMMSS)
+    latest_report = max(reports, key=lambda x: x.name.split("_")[1] if len(x.name.split("_")) >= 2 else x.name)
     print(f"📂 使用报告: {latest_report.name}")
 
     # Load data

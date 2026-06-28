@@ -24,6 +24,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    "XUEQIU_COOKIES":                         "xueqiu_cookies",
 }
 
 
@@ -105,6 +106,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
+    # Xueqiu logged-in cookies (optional). When set, the sentiment analyst
+    # uses an authenticated session to scrape stock discussion posts, which
+    # surfaces more posts and richer engagement data.
+    # Set via env var XUEQIU_COOKIES or config key xueqiu_cookies.
+    # Format: "key1=val1; key2=val2; ..." (standard cookie header string).
+    "xueqiu_cookies": "",
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

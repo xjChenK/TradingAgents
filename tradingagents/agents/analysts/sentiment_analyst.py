@@ -1,17 +1,12 @@
 """Sentiment analyst — multi-source sentiment analysis for a target ticker.
 
-Previously named ``social_media_analyst``. Renamed and redesigned because
-the old version had a prompt that demanded social-media analysis but the
-only tool available was Yahoo Finance news — which led LLMs to fabricate
-Reddit/X/StockTwits content under prompt pressure (verified live).
+Designed for the A-share (China) market. Pre-fetches three complementary
+data sources before the LLM is invoked and injects them into the prompt
+as structured blocks:
 
-The redesigned agent pre-fetches three complementary data sources before
-the LLM is invoked and injects them into the prompt as structured blocks:
-
-  1. News headlines     — Yahoo Finance (institutional framing)
-  2. StockTwits messages — retail-trader posts indexed by cashtag, with
-                           user-labeled Bullish/Bearish sentiment tags
-  3. Reddit posts        — r/wallstreetbets, r/stocks, r/investing
+  1. News headlines        — Yahoo Finance / AKShare (东方财富) news
+  2. Fear & Greed Index      — China MM Fear & Greed Index (market sentiment)
+  3. Xueqiu/雪球 discussions — A-share stock discussion community data
 
 The agent does not use tool-calling; the data is in the prompt from
 turn 0. Output uses the structured-output pattern (json_schema for
@@ -39,8 +34,8 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
-from tradingagents.dataflows.reddit import fetch_reddit_posts
-from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
+from tradingagents.dataflows.fear_greed import fetch_fear_greed_index
+from tradingagents.dataflows.xueqiu import fetch_xueqiu_posts
 
 
 def _seven_days_back(trade_date: str) -> str:
@@ -50,10 +45,10 @@ def _seven_days_back(trade_date: str) -> str:
 def create_sentiment_analyst(llm):
     """Create a sentiment analyst node for the trading graph.
 
-    Pre-fetches news + StockTwits + Reddit data, injects them into the
-    prompt as structured blocks, and produces a deterministic sentiment
-    report via structured output (with a free-text fallback for providers
-    that do not support it).
+    Pre-fetches news + Fear & Greed Index + Xueqiu community data, injects
+    them into the prompt as structured blocks, and produces a deterministic
+    sentiment report via structured output (with a free-text fallback for
+    providers that do not support it).
     """
     structured_llm = bind_structured(llm, SentimentReport, "Sentiment Analyst")
 
@@ -67,16 +62,16 @@ def create_sentiment_analyst(llm):
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
+        fear_greed_block = fetch_fear_greed_index(ticker, end_date)
+        xueqiu_block = fetch_xueqiu_posts(ticker)
 
         system_message = _build_system_message(
             ticker=ticker,
             start_date=start_date,
             end_date=end_date,
             news_block=news_block,
-            stocktwits_block=stocktwits_block,
-            reddit_block=reddit_block,
+            fear_greed_block=fear_greed_block,
+            xueqiu_block=xueqiu_block,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -124,52 +119,56 @@ def _build_system_message(
     start_date: str,
     end_date: str,
     news_block: str,
-    stocktwits_block: str,
-    reddit_block: str,
+    fear_greed_block: str,
+    xueqiu_block: str,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
-    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+    return f"""You are a financial market sentiment analyst specializing in the China A-share market. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
 
-### News headlines — Yahoo Finance, past 7 days
+### News headlines — Yahoo Finance / AKShare, past 7 days
 Institutional framing. Fact-driven, slower-moving signal.
 
 <start_of_news>
 {news_block}
 <end_of_news>
 
-### StockTwits messages — retail-trader social platform indexed by cashtag
-Fast-moving signal. Each message carries a user-labeled sentiment tag (Bullish / Bearish / no-label) plus the message body.
+### China MM Fear & Greed Index — macro-level market sentiment
+A market-wide sentiment gauge on a 0 (Extreme Fear) to 100 (Extreme Greed) scale. When combined with per-stock data, it tells you whether the stock's sentiment is in sync with or diverging from the broader market.
 
-<start_of_stocktwits>
-{stocktwits_block}
-<end_of_stocktwits>
+<start_of_fear_greed>
+{fear_greed_block}
+<end_of_fear_greed>
 
-### Reddit posts — r/wallstreetbets, r/stocks, r/investing (past 7 days)
-Community discussion. Engagement signal via upvote score and comment count. Subreddit character matters (r/wallstreetbets is often contrarian/exuberant; r/stocks more measured; r/investing longer-term).
+### Xueqiu/雪球 community discussion data — A-share stock discussion sentiment
+The largest investor community in China (20M+ users). Sentiment metrics include composite score, user attention index, participation willingness, and institutional participation. When available, raw discussion post content is included.
 
-<start_of_reddit>
-{reddit_block}
-<end_of_reddit>
+<start_of_xueqiu>
+{xueqiu_block}
+<end_of_xueqiu>
 
-## How to analyze this data (best practices)
+## How to analyze this data (best practices for China A-share market)
 
-1. **Read the StockTwits Bullish/Bearish ratio as a leading retail-sentiment signal.** A 70/30 bullish/bearish split is moderately bullish; ≥90/10 may indicate over-extension and contrarian risk; 50/50 is uncertainty. Sample size matters — base rates on the actual message count, not percentages alone.
+1. **Read the Fear & Greed Index as a market-level sentiment anchor.** A reading above 70 indicates Greed (potential over-extension); below 30 indicates Fear (potential capitulation). Divergence between the index and individual stock sentiment is itself a signal.
 
-2. **Look for cross-source divergences.** If news framing is bearish but StockTwits is overwhelmingly bullish, that mismatch is itself a signal — it can mean retail is leaning into a thesis the news flow hasn't caught up to (or vice versa, that retail is chasing while institutions are cautious).
+2. **Use the Xueqiu/雪球 composite score (0-100) as a per-stock sentiment baseline.** Scores consistently above 70 are bullish; below 30 are bearish; 30-70 is neutral. Pair this with the user attention index — high attention + high score = consensus bullish; high attention + low score = negative sentiment concentration.
 
-3. **Weight Reddit posts by engagement.** A 400-upvote / 200-comment thread reflects community attention; a 3-upvote post is noise. Read the body excerpts for context — the title alone often misleads.
+3. **Look for cross-source divergences.** If news framing is bearish but the Fear & Greed Index shows Greed, or if the composite score is bullish but participation willingness is falling — these mismatches are themselves actionable signals.
 
-4. **Distinguish opinion from event.** A news headline ("Nvidia announces $500M Corning deal") is an event; a StockTwits post ("buying NVDA, this is going to moon") is opinion. Both are inputs but should be weighted differently in your conclusions.
+4. **Weight the Fear & Greed Index differently based on stock characteristics.** Large-cap blue chips (e.g. 贵州茅台, 招商银行) track the market index more closely; small/mid-cap stocks may diverge significantly. Note when the stock's individual sentiment moves against the market tide.
 
-5. **Identify recurring narrative themes.** What topic keeps coming up across sources? That's the dominant narrative driving current sentiment.
+5. **Distinguish event-driven news from sentiment drift.** A company earnings announcement (news block) is an event; a change in the composite score or user attention index over several days reflects sentiment drift. Both matter but differently.
 
-6. **Be honest about data limits.** If StockTwits returned only a handful of messages, or one or more sources returned an "<unavailable>" placeholder, the sentiment read is less robust — flag this explicitly in the `confidence` field and the narrative. If the sources are silent on a given subreddit, say so.
+6. **Identify recurring narrative themes.** What concerns or catalysts keep appearing across news and community data? That's the dominant narrative driving current sentiment.
 
-7. **Identify catalysts and risks** that emerge across sources — news of upcoming earnings, product launches, competitive threats, macro headlines, etc.
+7. **Be honest about data limits.** If the Fear & Greed Index returned a placeholder or Xueqiu data is unavailable, the sentiment read is less robust — flag this explicitly in the `confidence` field and the narrative.
 
-8. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
+8. **Remember the A-share market context.** Retail investors dominate (80%+ of trading volume), so community sentiment metrics matter more than in US/developed markets. However, retail sentiment can be contrarian — extreme consensus often marks turning points.
+
+9. **Identify catalysts and risks** that emerge across sources — news of policy changes, industry regulation, economic data releases, earnings, product launches, etc.
+
+10. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
 
 ## Output fields
 

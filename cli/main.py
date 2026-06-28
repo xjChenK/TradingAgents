@@ -28,6 +28,7 @@ from cli.announcements import display_announcements, fetch_announcements
 from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (
     ask_anthropic_effort,
+    get_default_analysis_date,
     ask_gemini_thinking_config,
     ask_glm_region,
     ask_minimax_region,
@@ -751,7 +752,7 @@ def get_user_selections():
         )
 
     # Step 2: Analysis date
-    default_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    default_date = get_default_analysis_date()
     console.print(
         create_question_box(
             "Step 2: Analysis Date",

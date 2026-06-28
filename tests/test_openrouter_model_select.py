@@ -111,12 +111,12 @@ class TestCancelExitsCleanly:
 
 
 @pytest.mark.unit
-class TestLanguageDefaultsToEnglish:
-    def test_select_cancel_defaults_english(self):
+class TestLanguageDefaultsToChinese:
+    def test_select_cancel_defaults_chinese(self):
         with mock.patch.object(utils.questionary, "select", return_value=_asks(None)):
-            assert utils.ask_output_language() == "English"
+            assert utils.ask_output_language() == "Chinese"
 
-    def test_custom_language_cancel_defaults_english(self):
+    def test_custom_language_cancel_defaults_chinese(self):
         with mock.patch.object(utils.questionary, "select", return_value=_asks("custom")), \
              mock.patch.object(utils.questionary, "text", return_value=_asks(None)):
-            assert utils.ask_output_language() == "English"
+            assert utils.ask_output_language() == "Chinese"

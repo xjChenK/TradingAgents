@@ -99,6 +99,21 @@ def filter_analysts_for_asset_type(
     ]
 
 
+def get_default_analysis_date() -> str:
+    """Return today's date in Asia/Shanghai, or the last Friday if today is a weekend."""
+    import pytz
+    from datetime import datetime, timedelta
+
+    tz = pytz.timezone("Asia/Shanghai")
+    today = datetime.now(tz)
+    # Monday=0 … Sunday=6
+    if today.weekday() == 5:  # Saturday → go back 1 day
+        today -= timedelta(days=1)
+    elif today.weekday() == 6:  # Sunday → go back 2 days
+        today -= timedelta(days=2)
+    return today.strftime("%Y-%m-%d")
+
+
 def get_analysis_date() -> str:
     """Prompt the user to enter a date in YYYY-MM-DD format."""
     import re
@@ -346,11 +361,11 @@ def _llm_provider_table() -> list[tuple[str, str, str | None]]:
     """
     ollama_url = os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1"
     return [
+        ("DeepSeek", "deepseek", "https://api.deepseek.com"),
         ("OpenAI", "openai", "https://api.openai.com/v1"),
         ("Google", "google", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),
         ("xAI", "xai", "https://api.x.ai/v1"),
-        ("DeepSeek", "deepseek", "https://api.deepseek.com"),
         ("Qwen", "qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
         ("GLM", "glm", "https://open.bigmodel.cn/api/paas/v4/"),
         ("MiniMax", "minimax", "https://api.minimax.io/v1"),
@@ -664,17 +679,8 @@ def ask_output_language() -> str:
     choice = questionary.select(
         "Select Output Language:",
         choices=[
-            questionary.Choice("English (default)", "English"),
-            questionary.Choice("Chinese (中文)", "Chinese"),
-            questionary.Choice("Japanese (日本語)", "Japanese"),
-            questionary.Choice("Korean (한국어)", "Korean"),
-            questionary.Choice("Hindi (हिन्दी)", "Hindi"),
-            questionary.Choice("Spanish (Español)", "Spanish"),
-            questionary.Choice("Portuguese (Português)", "Portuguese"),
-            questionary.Choice("French (Français)", "French"),
-            questionary.Choice("German (Deutsch)", "German"),
-            questionary.Choice("Arabic (العربية)", "Arabic"),
-            questionary.Choice("Russian (Русский)", "Russian"),
+            questionary.Choice("Chinese (中文, default)", "Chinese"),
+            questionary.Choice("English", "English"),
             questionary.Choice("Custom language", "custom"),
         ],
         style=questionary.Style([
@@ -684,14 +690,14 @@ def ask_output_language() -> str:
         ]),
     ).ask()
 
-    # Output language has a sensible default, so a cancel falls back to English
+    # Output language has a sensible default, so a cancel falls back to Chinese
     # rather than exiting the run (unlike the required model/provider prompts).
     if choice is None:
-        return "English"
+        return "Chinese"
     if choice == "custom":
         return (questionary.text(
             "Enter language name (e.g. Turkish, Vietnamese, Thai, Indonesian):",
             validate=lambda x: len(x.strip()) > 0 or "Please enter a language name.",
-        ).ask() or "").strip() or "English"
+        ).ask() or "").strip() or "Chinese"
 
     return choice

@@ -77,15 +77,15 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
     # LLM settings
-    "llm_provider": "openai",
-    "deep_think_llm": "MiniMax-M2.7-highspeed",
-    "quick_think_llm": "MiniMax-M2.7-highspeed",
+    "llm_provider": "deepseek",
+    "deep_think_llm": "deepseek-v4-pro",
+    "quick_think_llm": "deepseek-v4-flash",
     # When None, each provider's client falls back to its own default endpoint
-    # (api.openai.com for OpenAI, generativelanguage.googleapis.com for Gemini, ...).
+    # (api.deepseek.com for DeepSeek, generativelanguage.googleapis.com for Gemini, ...).
     # The CLI overrides this per provider when the user picks one. Keeping a
     # provider-specific URL here would leak (e.g. OpenAI's /v1 was previously
     # being forwarded to Gemini, producing malformed request URLs).
-    "backend_url": "https://v2.aicodee.com/v1",
+    "backend_url": None,
     # Provider-specific thinking configuration
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"

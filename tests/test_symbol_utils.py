@@ -48,6 +48,14 @@ class TestNormalizeSymbol(unittest.TestCase):
         # must not be mangled into a fake forex pair.
         self.assertEqual(normalize_symbol("ABCDEF"), "ABCDEF")
 
+    def test_china_a_share_6_digit_codes(self):
+        self.assertEqual(normalize_symbol("002475"), "002475.SZ")   # Shenzhen SME
+        self.assertEqual(normalize_symbol("600519"), "600519.SS")   # Shanghai main board
+        self.assertEqual(normalize_symbol("000002"), "000002.SZ")   # Shenzhen main board
+        self.assertEqual(normalize_symbol("300750"), "300750.SZ")   # Shenzhen ChiNext
+        self.assertEqual(normalize_symbol("688981"), "688981.SS")   # Shanghai Star
+        self.assertEqual(normalize_symbol("830799"), "830799.BJ")   # Beijing
+
     def test_empty_input_passthrough(self):
         self.assertEqual(normalize_symbol(""), "")
 

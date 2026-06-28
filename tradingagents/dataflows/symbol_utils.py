@@ -96,6 +96,32 @@ def _normalize_crypto(s: str) -> str | None:
     return None
 
 
+def _normalize_china_a_share(s: str) -> str | None:
+    """Return Yahoo symbol for Chinese A-share codes (exactly 6 digits), or None.
+
+    Yahoo Finance requires a suffix suffix for Chinese A-share stocks:
+
+        first digit   exchange   suffix   examples
+        ────────────   ────────   ──────   ──────────────
+        6, 9           Shanghai   .SS      600519.SS, 688981.SS
+        0, 2, 3        Shenzhen   .SZ      000002.SZ, 002475.SZ, 300750.SZ
+        4, 8           Beijing    .BJ      830799.BJ
+
+    Only pure 6-digit codes are matched — the function rejects symbols that
+    contain letters or structural characters so existing rules (forex, crypto,
+    alias table) stay undisturbed.
+    """
+    if len(s) == 6 and s.isdigit():
+        first = s[0]
+        if first in ("6", "9"):
+            return f"{s}.SS"
+        if first in ("0", "2", "3"):
+            return f"{s}.SZ"
+        if first in ("4", "8"):
+            return f"{s}.BJ"
+    return None
+
+
 def normalize_symbol(raw: str) -> str:
     """Map a user/broker symbol to its canonical Yahoo Finance symbol.
 
@@ -104,7 +130,8 @@ def normalize_symbol(raw: str) -> str:
       2. Crypto rule: a known crypto base quoted in USD/USDT/USDC (dashed or
          not) -> ``BASE-USD``.
       3. Forex rule: six letters that are two ISO currency codes -> ``PAIR=X``.
-      4. Otherwise the upper-cased symbol is returned unchanged (plain
+      4. China A-share rule: a 6-digit code -> ``CODE.SS`` / ``.SZ`` / ``.BJ``.
+      5. Otherwise the upper-cased symbol is returned unchanged (plain
          equities, ETFs, Yahoo-native symbols like ``GC=F`` or ``^GSPC``).
 
     A trailing ``+`` (broker CFD marker, e.g. ``XAUUSD+``) is stripped before
@@ -119,12 +146,15 @@ def normalize_symbol(raw: str) -> str:
     s = s.rstrip("+")
 
     crypto = _normalize_crypto(s)
+    china = _normalize_china_a_share(s)
     if s in _ALIASES:
         canonical = _ALIASES[s]
     elif crypto is not None:
         canonical = crypto
     elif len(s) == 6 and s[:3] in _FOREX_CURRENCIES and s[3:] in _FOREX_CURRENCIES:
         canonical = f"{s}=X"
+    elif china is not None:
+        canonical = china
     else:
         canonical = s
 
